@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1583387812201.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1191749530",
+    "id" : "3EF1DC2B",
+    "lastKnownWriteTime" : 1583391886,
+    "last_content_update" : 1583391886389,
+    "path" : "~/INF550_HW1/data-modification/get-google-trends.R",
+    "project_path" : "get-google-trends.R",
+    "properties" : {
+        "cursorPosition" : "11,71",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

@@ -1,0 +1,93 @@
+# crawl-microsoft-academic.R ----------------------------------------------
+# The instructions to the crawler to scrape Microsoft Academic.
+# 
+# Have “rselenium-chrome” as the working directory, so R can find the necessary
+# input files.
+# 
+# Needs Docker Desktop installed, and both rselenium-base-functions.R and 
+# microsoft-academic-functions.R in the working directory (it will source 
+# both of these .R files when running).
+# 
+# Outputs the following:
+# - microsoft-academic-results.csv
+#
+# If there are questions/comments, please contact Matt (mdlee@usc.edu).
+# -------------------------------------------------------------------------
+
+# Loading required packages
+suppressPackageStartupMessages(library("tidyverse"))
+suppressPackageStartupMessages(library("lubridate"))
+suppressPackageStartupMessages(library("RSelenium"))
+suppressPackageStartupMessages(library("getProxy"))
+
+# Loading wrapper functions
+source("rselenium-base-functions.R")
+source("microsoft-academic-functions.R")
+
+# Loading Bik's dataset
+bik_authors <- read.csv("inputs/microsoft-academic-query.csv", stringsAsFactors = FALSE)
+# One title needs adjustment, else it finds the wrong person
+bik_authors$title[188] <- "D14–SCF D3 -dependent degradation of D53 regulates strigolactone signalling"
+results <- data.frame(
+  first_author = bik_authors$first_author,
+  affiliation = as.character(NA),
+  publications = as.character(NA),
+  citations = as.numeric(NA),
+  year_start = as.numeric(NA),
+  year_end = as.numeric(NA),
+  top_topics = as.character(NA),
+  publication_types = as.character(NA),
+  top_authors = as.character(NA),
+  top_journals = as.character(NA),
+  top_institutions = as.character(NA),
+  top_conferences = as.character(NA),
+  not_found = as.numeric(NA),
+  stringsAsFactors = FALSE
+)
+
+# Start session
+startSession()
+
+# Begin crawl job
+# If error occurs (e.g. due to lost connection), then run loop again
+# R will pick up where it left off in the list
+i <- suppressWarnings(min(which(!rowSums(!is.na(results[,-1])))))
+while (!is_empty(i)) {
+  # Mark earliest row with all missing (NA) information -- excluding author name
+  i <- suppressWarnings(min(which(!rowSums(!is.na(results[,-1])))))
+  Sys.sleep(1)
+  # If no such rows, i will be Inf; at this point, break the loop
+  if (i == Inf) {
+    break
+  }
+  # Idenfify author/paper i in Bik's dataset
+  author <- bik_authors$first_author[i]
+  paper <- bik_authors$title[i]
+  
+  tryCatch(
+    expr = {
+      # Attempt to replace ith row with the results from...
+      results[i, 1:(ncol(results) - 1)] <- tryCatch(
+        # ...an attempted search for author + paper
+        expr = {
+          microsoftSearchAuthor(author, paper)
+        },
+        # If error with microsoftSearchAuthor, return nothing
+        error = function(e) {
+          
+        }
+      )
+    },
+    # If error with replacing ith row, mark that row
+    # Next iteration will skip
+    error = function(e) {
+      results$not_found[i] <- as.numeric(1)
+      assign("results", results, envir = globalenv())
+    }
+  )
+}
+
+# End session
+endSession()
+
+write.csv(results, "microsoft-academic-results.csv", row.names = FALSE)

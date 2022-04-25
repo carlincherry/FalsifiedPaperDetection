@@ -1,0 +1,47 @@
+# r-keyring-tutorial.R ----------------------------------------------------
+# Steps to set up a keyring in R, which allows it to use username/password 
+# credentials without including those values in source code or the console. 
+# This script is intended to be run line-by-line to configure a keyring 
+# called “usc”; we use this to log into LinkedIn for scraping.
+#
+# If there are questions/comments, please contact Matt (mdlee@usc.edu).
+# -------------------------------------------------------------------------
+
+# Load package
+library("keyring")
+
+# List keyrings
+keyring_list()
+
+# Create a keyring
+# When running this, R will prompt for a password to the keyring
+# This password is arbitrary; it only locks/unlocks the keyring
+keyring_create(keyring = "usc")
+
+# Confirm creation of new keyring
+keyring_list()
+
+# Set a key in the new "usc" keyring for the service "linkedin"
+# When running this, R will prompt for a password to the key
+# The username/password entered here should be ACTUAL credentials
+key_set(
+  service = "linkedin", # name to describe what credentials are for
+  username = "student", # name to describe user (arbitrary)
+  keyring = "usc"
+)
+
+# Confirm creation of new key in "usc" keyring
+key_list(keyring = "usc")
+
+# Now in source code, instead of typing out your username and password,
+# we can have R access those with function calls.
+
+# Getting usernames: source code has lines like this...
+key_list(service = "linkedin", keyring = "usc")$username
+# ...R reads the username of the "netID" configured in the "usc" keyring
+
+# Getting passwords: source code has lines like this...
+key_get(service = "linkedin",
+        username = key_list(service = "linkedin", keyring = "usc")$username,
+        keyring = "usc")
+# ...R reads the password given to it for that username

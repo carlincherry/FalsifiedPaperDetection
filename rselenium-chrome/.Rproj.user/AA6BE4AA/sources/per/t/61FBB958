@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1583388154583.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "4294095164",
+    "id" : "61FBB958",
+    "lastKnownWriteTime" : 1583391844,
+    "last_content_update" : 1583391844688,
+    "path" : "~/INF550_HW1/rselenium-chrome/crawl-microsoft-academic.R",
+    "project_path" : "crawl-microsoft-academic.R",
+    "properties" : {
+        "cursorPosition" : "13,71",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

@@ -1,0 +1,520 @@
+# cluster-analysis.R ------------------------------------------------------
+# Our exploration of the updated dataset and cluster analysis. Runs tests to 
+# identify features and parameters for clustering, examines distance/similarity
+# measures, creates clusters, and visualizes results.
+# 
+# Needs the following files in the working directory:
+# - cosine_similarity.csv
+# - jaccard_similarity.csv
+# - edit_value_similarity.csv
+# - bik-modified.csv
+# 
+# Outputs nothing (plots manually saved from Viewer).
+#
+# If there are questions/comments, please contact Matt (mdlee@usc.edu).
+# -------------------------------------------------------------------------
+
+library(tidyverse) # for various syntax operations
+library(naniar) # for missingness map
+library(factoextra) # for principal component analysis visuals
+library(cluster) # for distance measures, clustering
+library(Rtsne) # for visualizing dissimilarity matrices/clusters
+library(arsenal) # for fancier print tables
+library(grid) # for panel visualizations
+library(gridExtra) # for panel visualizations
+
+# Data Loading/Exploration ------------------------------------------------
+
+# Loading datasets
+cosine_similarity <- read.csv("cosine_similarity.csv", stringsAsFactors = FALSE)
+jaccard_similarity <- read.csv("jaccard_similarity.csv", stringsAsFactors = FALSE)
+edit_value_similarity <- read.csv("edit_value_similarity.csv", stringsAsFactors = FALSE)
+bik <- read.csv("bik-modified.csv") %>%
+  # Converting all boolean variables to 'logical'
+  mutate_at(
+    vars(simple_duplication, reposition_duplication, alteration_duplication,
+         cuts_and_beautification, reported, retraction, correction, no_action,
+         completed),
+    function(x) {
+      x %>%
+        as.logical %>%
+        coalesce(FALSE)
+    }
+  )
+
+# Missingness map
+# - do we want to use features with high % missing?
+# - possible imputation? e.g. degree_level used the mean
+
+# EDIT: team decided imputing degree_level with average (4, roughly bachelor)
+# may not be suitable.
+
+# To exclude:
+# month, top_conferences, conference_variety, degree_area, highest_degree, degree_level
+viz_miss <- vis_miss(bik) +
+  theme(plot.margin = unit(c(0, 3, 1, 1), "cm"))
+viz_miss
+
+# Principal Component Analysis
+# - how much do numeric variables contribute to variation of dataset?
+# - not to consider too seriously, since we have mostly categorical data
+pca <- prcomp(bik %>%
+                select_if(is.numeric) %>%
+                na.exclude,
+              scale = TRUE)
+# PCA visualization
+# - axes represent principal components 1 and 2 (think of these as the 
+#   dimensions along which the data is the most varied or spread out)
+# - longer arrows indicate larger contribution to principal components 1 & 2.
+#   i.e. more contribution to overall variance
+viz_pca <- fviz_pca_var(pca, col.var = "contrib", repel = TRUE)
+viz_pca
+
+# Examining variables -- consider excluding variables with little variation
+# - remove: reported, completed
+summary(bik)
+
+# Methods for Clustering --------------------------------------------------
+
+makeDist <- function(input, size) {
+  # Transforms Tika-Similarity output into a 'dist' object in R (dissimilarity matrix)
+  # Need this to make clustering visualizations with Tika-Simlarity results
+  # Note: dist = 1 - simimlarity
+  # arguments:
+  # - input    data.frame; outCSV from tika-similarity
+  # - size     integer; number of rows (and columns, since dissimilarity matrices are square)
+  output <- matrix(nrow = size, ncol = size)
+  
+  for (i in 1:nrow(input)) {
+    x <- input$x.coordinate[i] + 1
+    y <- input$y.coordinate[i] + 1
+    
+    if (x < y) {
+      output[y, x] <- 1 - input$Similarity_score[i]
+    } else {
+      output[x, y] <- 1 - input$Similarity_score[i]
+    }
+  }
+  diag(output) <- 0
+  output <- as.dist(output)
+  return(output)
+}
+
+findK <- function(x, method = "pam", kmax = 10) {
+  # Takes in a dissimilarity matrix and a clustering method that needs a 
+  # predetermined k value, runs diagnostic tests to find optimal k. Returns
+  # a list of plots: 1) objective function (the thing optimized, varies by
+  # clustering method) and 2) silhouette plot
+  #
+  # For objective plot, look for the "elbow" to get optimal k
+  # For silhouette plot, look for the maximum average silhouette
+  # 
+  # More on interpreting silhouette plot:
+  # https://stats.stackexchange.com/questions/10540/how-to-interpret-mean-of-silhouette-plot
+  #
+  # arguments:
+  # - x       "dist" or "dissimilarity"; dissimilarity matrix generated from base
+  #           R's dist() or cluster::daisy().
+  #
+  # - method  character; either "pam" for partitioning around medoids, or
+  #           "kmeans" for k-means (if we have time...)
+  #
+  # - kmax    maximum k value to test; will test k values 1 to kmax.
+  
+  if (!method %in% c("pam", "kmeans")) {
+    stop("Possible methods are kmeans, pam, ...")
+  }
+  
+  # Initiaizing values
+  obj <- numeric(kmax) # objective function (see comment below)
+  asw <- numeric(kmax) # average silhouette width
+  
+  # Objective funcion is different across methods -- the thing to optimize.
+  # k-means: within-cluster sum of square
+  # k-medoids: sum of the dissimiliarities of the observations to their closest
+  #   representative object
+  
+  # Making the objective/silhouette plots...
+  if (method == "pam") {
+    pam <- lapply(
+      as.list(1:kmax),
+      function(k) {pam(x, k)}
+    )
+    
+    obj[1:kmax] <- sapply(
+      1:kmax,
+      function(i) {pam[[i]]$objective[1]}
+    )
+    
+    asw[2:kmax] <- sapply(
+      2:kmax,
+      function(i) {pam[[i]]$silinfo$avg.width}
+      
+    )
+  }
+  
+  if (method == "kmeans") {
+    kmeans <- lapply(
+      as.list(1:kmax),
+      function(k) {kmeans(x, k)}
+    )
+    
+    obj[1:kmax] <- sapply(
+      1:kmax,
+      function(i) {kmeans[[i]]$tot.withinss}
+    )
+    
+    avg_sil <- function(k) {
+      km.res <- kmeans(df, centers = k, nstart = 25)
+      ss <- silhouette(km.res$cluster, dist(df))
+      mean(ss[, 3])
+    }
+    
+    asw[2:kmax] <- sapply(
+      2:kmax,
+      function(i) {
+        kmeans[[i]]$cluster %>%
+          silhouette(., dist(x)) %>%
+          .[, 3] %>% # sil_width
+          mean
+      }
+    )
+  }
+  # Optimal k is the maximum of the average silhouette widths.
+  k_best <- which.max(asw)
+  
+  # Values for ggplot visualizations
+  df <- data.frame(
+    k = 1:kmax,
+    obj = obj,
+    asw = asw
+  )
+  
+  # ggplot: plotting results
+  output <- list(
+    objective = ggplot(df, aes(x = k, y = obj)) +
+      geom_line() +
+      geom_point(pch = 19) +
+      scale_y_continuous(name = "Objective Function") +
+      scale_x_continuous(name = "Number of Clusters k", breaks = 1:kmax) +
+      ggtitle(paste0("Clustering Assessment: Elbow Method (", method, ")")) +
+      theme_bw() +
+      theme(panel.grid.minor.x = element_blank()),
+    
+    silhouette = ggplot(df, aes(x = k, y = asw)) +
+      geom_line() +
+      geom_point(pch = 19) +
+      geom_vline(aes(xintercept = k_best), linetype = 2, color = "red") +
+      annotate("text", x = k_best, y = 0, label = "best", color = "red") +
+      scale_y_continuous(name = "Average Silhouette Width", limits = c(0, 1)) +
+      scale_x_continuous(name = "Number of Clusters k", breaks = 1:kmax) +
+      ggtitle(paste0("Clustering Assessment: Silhouette Method (", method, ")")) + 
+      theme_bw() +
+      theme(panel.grid.minor.x = element_blank())
+  )
+}
+
+testTSNE <- function(dist, perplexity = 30, max_iter = 1000, seed = as.integer(NA)) {
+  # Runs just the TSNE plot for input dist/dissimilarity object. Can also modify
+  # the tuning parameters of Rtsne to try and get a better image.
+  if (!is.na(seed)) {
+    set.seed(seed)
+    title <- paste0("TSNE Plot (seed: ", seed, ")")
+  } else {
+    title <- "TSNE Plot"
+  }
+  
+  tsne <- Rtsne(dist, 
+                is_distance = TRUE, 
+                perplexity = perplexity, 
+                max_iter = max_iter)
+  
+  dfViz <- tsne$Y %>%
+    data.frame %>%
+    `colnames<-`(c("x", "y"))
+  
+  ggplot(dfViz) +
+    geom_point(aes(x = x, y = y)) +
+    ggtitle(label = title)
+}
+
+clusterPAM <- function(dist, k, df, seed = as.integer(NA), perplexity = 30, max_iter = 1000, color_by = "cluster") {
+  # Takes dissimilarity matrix, a specified value of k (number of clusters),
+  # and the -original- dataset (includes descriptive features not used in
+  # dissimilarity object). Performs partitioning around medoids with specified
+  # k. Returns a list of objects: 1) original dataset with cluster assignments, 
+  # 2) summary tables, and 3) a TSNE plot showing the clusters.
+  # 
+  # arguments
+  # - dist          "dist" or "dissimilarity"; dissimilarity matrix generated 
+  #                 from base R's dist() or cluster::daisy().
+  #
+  # - k             integer; number of clusters to use
+  #
+  # - df            data.frame; original dataset with all features
+  #
+  # - seed          integer; random number generator seed (set to keep same TSNE)
+  #
+  # - perplexity    integer; tuning parameter for tSNE plot
+  #
+  # - max_iter      integer; tuning parameter for tSNE plot
+  #
+  # - color_by      character; variable to color by, default is "cluster"; this
+  #                 can by any categorical/logical variable from the original data
+  
+  if (!is.na(seed)) {
+    set.seed(seed)
+    title <- paste0("t-SNE Plot (seed: ", seed, ")")
+  } else {
+    title <- "t-SNE Plot"
+  }
+  
+  pam <- pam(dist, k)
+  
+  tsne <- Rtsne(dist, is_distance = TRUE)
+  
+  dfTable <- df %>%
+    mutate(
+      cluster = factor(pam$clustering),
+      center = row_number() %in% pam$id.med
+    )
+  
+  dfViz <- tsne$Y %>%
+    data.frame %>%
+    `colnames<-`(c("x", "y")) %>%
+    cbind(dfTable)
+  
+  dfData <- dfViz %>%
+    rownames_to_column("id")
+  
+  output <- list(
+    data = dfData,
+    tables = lapply(
+      list(
+        numeric = tableby(
+          df %>% 
+            select_if(is.numeric) %>% 
+            names %>% 
+            paste(collapse = " + ") %>%
+            paste("cluster ~", .) %>%
+            as.formula,
+          data = dfTable
+        ),
+        nonnumeric = tableby(
+          df %>%
+            select_if(negate(is.numeric)) %>%
+            select_if(~ nlevels(.) < 15) %>%
+            names %>%
+            paste(collapse = " + ") %>%
+            paste("cluster ~", .) %>%
+            as.formula,
+          data = dfTable
+        )
+      ),
+      function(x) {
+        summary(x, text = TRUE)
+      }
+    ),
+    viz = ggplot() +
+      geom_point(aes(x = x, y = y, color = !!as.symbol(color_by)),
+                 data = dfViz %>% filter(!center)) +
+      geom_point(aes(x = x, y = y, fill = !!as.symbol(color_by)),
+                 data = dfViz %>% filter(center),
+                 shape = 21,
+                 size = 4,
+                 color = "black",
+                 show.legend = FALSE) +
+      ggtitle(label = title)
+  )
+}
+
+# Distance Measures and Similarity ----------------------------------------
+
+# Converting Tika-Similarity objects to 'dist' objects
+dist_cosine <- makeDist(cosine_similarity, 214)
+dist_jaccard <- makeDist(jaccard_similarity, 214)
+dist_edit <- makeDist(edit_value_similarity, 214)
+# Feature selection already done for these distances when we computed them
+# in Tika-Similarity. They use the following (uncomment next line to run):
+# names(select(bik, -authors, -title, -citation, -doi, -reported, -completed, -first_author))
+
+# Gower distance 'dissimilarity' object
+# We select variables to go into dissimilarity measure (these also ultimately 
+# determine clusters) If any logical variables are selected, must specify 
+# whether they are symmetric or asymmetric binary through the `type` argument.
+dist_gower <- daisy(
+  bik %>% select(
+    #author,
+    #title,
+    #citation,
+    #doi,
+    year,
+    #month,
+    simple_duplication,
+    reposition_duplication,
+    alteration_duplication,
+    cuts_and_beautification,
+    #findings,
+    #reported,
+    correction_date,
+    retraction,
+    correction,
+    no_action,
+    #completed,
+    #first_author,
+    affiliation,
+    publications,
+    citations,
+    year_start,
+    year_end,
+    #top_topics,
+    #publication_types,
+    #top_authors,
+    #top_journals,
+    #top_institutions,
+    #top_conferences,
+    lab_size_approx,
+    publication_variety,
+    journal_variety,
+    institution_variety,
+    #conference_variety,
+    biology,
+    medicine,
+    immunology,
+    cancer,
+    biochemistry,
+    virology,
+    career_duration,
+    publication_rate,
+    #highest_degree,
+    #degree_area,
+    #degree_level,
+    total_cites,
+    impact_factor,
+    eigenfactor,
+    web_interest,
+    images_interest,
+    youtube_interest
+  ),
+  type = list(
+    asymm = c(
+      "simple_duplication",
+      "reposition_duplication", 
+      "alteration_duplication", 
+      "cuts_and_beautification", 
+      "retraction", 
+      "correction", 
+      "no_action", 
+      "biology",
+      "medicine", 
+      "immunology",
+      "cancer", 
+      "biochemistry",
+      "virology"
+    )
+  ),
+  metric = "gower"
+)
+
+# Distance matrix
+matrix_gower <- as.matrix(dist_gower)
+
+# Table of distance scores -- for easier examining
+dist_scores <- expand.grid(1:214, 1:214) %>%
+  `colnames<-`(c("x", "y")) %>%
+  filter(x < y) %>%
+  arrange(x) %>%
+  mutate(distance = as.numeric(NA))
+
+for (i in 1:nrow(dist_scores)) {
+  x <- dist_scores$x[i]
+  y <- dist_scores$y[i]
+  dist_scores$distance[i] <- matrix_gower[x, y]
+}
+
+# Converting gower 'dissimilarity' object to resemble a Tika-Similarity output
+# -1 to x, y, since Python indexes from 0; R from 1
+# similarity = 1 - distance
+gower_similarity <- dist_scores %>%
+  transmute(x.coordinate = x - 1,
+            y.coordinate = y - 1,
+            Similarity_score = 1 - distance)
+# Looks like tika-similarity!
+
+# Will look at a few rows to look for broad patterns
+# Define a temporary data.frame, use View() to open it in a new window
+# (viewer will update as we change `view`)
+# Note: R indices are Python indices + 1
+view <- bik[c(1), ]
+View(view)
+
+# General observation:
+# jaccard tends to be lower -- maybe set operations (intersect, union) don't
+# play out as well on feature values? Makes more sense when comparing two sets 
+# of feature names, rather than two arrays of feature values.
+
+# 81~87 highest similarity for all except cosine, where it is second highest.
+# Both papers are written by same author: Michael Waters
+view <- bik[c(82, 88), ]
+
+# 150~156 is second highest on all but cosine, and is in cosine's top 10
+# Another case of same author: Sawsan I. Kreydiyyeh (funny enough, the spelling
+# is not the same, so her features matched her papers together)
+view <- bik[c(151, 157), ]
+
+# 150~152 had simiarity when looking at Google Trends -- how similar overall?
+view <- bik[c(151, 153), ]
+sapply(
+  list(cosine_similarity, jaccard_similarity, edit_value_similarity, gower_similarity),
+  function(x) {
+    x %>%
+      filter(x.coordinate == 151, y.coordinate == 153) %>%
+      pull(Similarity_score) 
+  }
+)
+# c: 0.99, j: 0.24, e: 0.61, g: 0.69
+# Given that these two looked pretty close, it is unusual that most of these
+# are pretty low -- especially jaccard; cosine is exception -- it did well
+
+# Clustering --------------------------------------------------------------
+
+# Generate plots to determine optimal k for PAM
+k_cosine <- findK(dist_cosine, "pam", kmax = 10)
+k_jaccard <- findK(dist_jaccard, "pam", kmax = 10)
+k_edit_value <- findK(dist_edit, "pam", kmax = 10)
+k_gower <- findK(dist_gower, "pam", kmax = 10)
+
+grid.arrange(
+  grobs = list(k_cosine$objective, k_cosine$silhouette,
+               k_jaccard$objective, k_jaccard$silhouette,
+               k_edit_value$objective, k_edit_value$silhouette,
+               k_gower$objective, k_gower$silhouette),
+  ncol = 2,
+  nrow = 4
+)
+
+# Overall observation:
+# Silhouette doesn't look good for any besides cosine, as silhouette < 0.25 
+# is usually indicative of superficial structure, which warrants further
+# analysis or better featurization.
+
+# Cosine does decently, somehow. Optimal k = 2. However, it might be worth
+# considering k = 4 (the silhouette is nearly as good, but the split will
+# be more interesting)
+
+testTSNE(dist_cosine, seed = 550)
+
+# PAM clustering results
+resultsPAM <- clusterPAM(dist_cosine, 4, bik, seed = 550, color_by = "cluster")
+
+# t-SNE plot
+resultsPAM$viz
+
+# Examining clusters
+cluster1 <- resultsPAM$data %>% filter(cluster == 1)
+cluster2 <- resultsPAM$data %>% filter(cluster == 2)
+cluster3 <- resultsPAM$data %>% filter(cluster == 3)
+cluster4 <- resultsPAM$data %>% filter(cluster == 4)
+
+# Viewing...
+view <- resultsPAM$data

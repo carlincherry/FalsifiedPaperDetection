@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1582532650508.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "4099683812",
+    "id" : "EFDEA061",
+    "lastKnownWriteTime" : 1583391857,
+    "last_content_update" : 1583391857368,
+    "path" : "~/INF550_HW1/rselenium-chrome/rselenium-base-functions.R",
+    "project_path" : "rselenium-base-functions.R",
+    "properties" : {
+        "cursorPosition" : "272,0",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

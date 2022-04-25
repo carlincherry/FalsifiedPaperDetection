@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1583379050672.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1987937070",
+    "id" : "9BBAFEF5",
+    "lastKnownWriteTime" : 1583391853,
+    "last_content_update" : 1583391853599,
+    "path" : "~/INF550_HW1/rselenium-chrome/microsoft-academic-functions.R",
+    "project_path" : "microsoft-academic-functions.R",
+    "properties" : {
+        "cursorPosition" : "161,0",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

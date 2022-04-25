@@ -1,0 +1,26 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1582313873832.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1992020472",
+    "id" : "D08F3B88",
+    "lastKnownWriteTime" : 1583391881,
+    "last_content_update" : 1583391881797,
+    "path" : "~/INF550_HW1/data-modification/data-modification.R",
+    "project_path" : "data-modification.R",
+    "properties" : {
+        "cursorPosition" : "18,71",
+        "scrollLine" : "0",
+        "tempName" : "Untitled1"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

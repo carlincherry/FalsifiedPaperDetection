@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1583378950687.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1603210028",
+    "id" : "951B97A4",
+    "lastKnownWriteTime" : 1583391869,
+    "last_content_update" : 1583391869207,
+    "path" : "~/INF550_HW1/analysis/cluster-analysis.R",
+    "project_path" : "cluster-analysis.R",
+    "properties" : {
+        "cursorPosition" : "13,71",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
